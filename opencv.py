@@ -1,52 +1,66 @@
-from collections import defaultdict
-
 import cv2
-import numpy as np
-
+import time
 from ultralytics import YOLO
+import torch
+
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# print(f'Using device: {device}')
 
 # Load the YOLOv8 model
-model = YOLO('model.pt')
+model = YOLO('yolov8n.engine')
+# num_devices = cv2.cuda.getCudaEnabledDeviceCount()
+# cv2.cuda.setDevice(0)
+# print(cv2.__version__)
 
 # Open the video file
-
-cap = cv2.VideoCapture(2)
-
-# Store the track history
-track_history = defaultdict(lambda: [])
+cap = cv2.VideoCapture("v4l2src device=/dev/video0 ! video/x-raw, format = YUY2, width=640, height=480, framerate=30/1  ! videoconvert ! video/x-raw,format=BGR ! appsink")
+# used to record the time when we processed last frame 
+prev_frame_time = 0
+  
+# used to record the time at which we processed current frame 
+new_frame_time = 0
 
 # Loop through the video frames
 while cap.isOpened():
     # Read a frame from the video
     success, frame = cap.read()
-
+    # time when we finish processing for this frame 
     if success:
-        # Run YOLOv8 tracking on the frame, persisting tracks between frames
-        results = model.track(frame, persist=True)
-
-        # Get the boxes and track IDs
         
-        boxes = results[0].boxes.xywh.cpu()
-        if results[0].boxes.id != None:
-            track_ids = results[0].boxes.id.int().cpu().tolist()
+        new_frame_time = time.time() 
 
-        # Visualize the results on the frame
-        annotated_frame = results[0].plot()
+        fps = 1/(new_frame_time-prev_frame_time) 
+        
+        prev_frame_time = new_frame_time 
+        
+        # converting the fps into integer 
+        fps = int(fps) 
+    
+        # converting the fps to string so that we can display it on frame 
+        # by using putText function 
+        fps = str(fps) 
+        results = model.track(frame, persist=True)
+        
+        # frame_output =  result.plot()
 
-        # Plot the tracks
-        for box, track_id in zip(boxes, track_ids):
-            x, y, w, h = box
-            track = track_history[track_id]
-            track.append((float(x), float(y)))  # x, y center point
-            if len(track) > 30:  # retain 90 tracks for 90 frames
-                track.pop(0)
+        for result in results:
+            box_coordinates = result.boxes.xyxy.cpu().numpy().astype(int).tolist()
+            ids = result.boxes.id
 
-            # Draw the tracking lines
-            points = np.hstack(track).astype(np.int32).reshape((-1, 1, 2))
-            cv2.polylines(annotated_frame, [points], isClosed=False, color=(230, 230, 230), thickness=10)
+            print(box_coordinates)
+            if len(box_coordinates) != 0 and ids != None:
+                ids_list = ids.cpu().numpy().astype(int).tolist()
+                
+                for box_coordinate in box_coordinates:
+                    # id = int(id)
+                    x1, y1, x2, y2 = box_coordinate
 
-        # Display the annotated frame
-        cv2.imshow("YOLOv8 Tracking", annotated_frame)
+                    frame_output = cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 1)
+      
+
+
+        cv2.putText(frame, fps, (7, 70), cv2.FONT_HERSHEY_SIMPLEX , 3, (100, 255, 0), 3, cv2.LINE_AA) 
+        cv2.imshow("YOLOv8", frame)
 
         # Break the loop if 'q' is pressed
         if cv2.waitKey(1) & 0xFF == ord("q"):
