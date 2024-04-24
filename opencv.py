@@ -15,6 +15,7 @@ model = YOLO('yolov8n.engine')
 # Open the video file
 cap = cv2.VideoCapture("v4l2src device=/dev/video0 ! video/x-raw, format = YUY2, width=640, height=480, framerate=30/1  ! videoconvert ! video/x-raw,format=BGR ! appsink")
 # used to record the time when we processed last frame 
+# cap = cv2.VideoCapture("/dev/video0")
 prev_frame_time = 0
   
 # used to record the time at which we processed current frame 
